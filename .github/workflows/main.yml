@@ -18,20 +18,19 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
-
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew || true
+      with:
+        gradle-version: '8.7'
 
     - name: Build APK with Gradle
-      run: ./gradlew assembleDebug --stacktrace
+      working-directory: SoundFlow
+      run: gradle :app:assembleDebug --stacktrace
 
     - name: Upload SoundFlow APK
       uses: actions/upload-artifact@v4
       with:
         name: SoundFlow-Debug-APK
-        path: app/build/outputs/apk/debug/*.apk
+        path: SoundFlow/app/build/outputs/apk/debug/*.apk
         retention-days: 14
