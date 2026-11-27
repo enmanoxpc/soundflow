@@ -29,14 +29,12 @@ import com.soundflow.music.ui.theme.DarkBackground
 import com.soundflow.music.ui.theme.DarkSurface
 import com.soundflow.music.ui.theme.PurplePrimary
 import com.soundflow.music.ui.theme.SoundFlowTheme
-import com.soundflow.music.ui.theme.TextPrimary
 import com.soundflow.music.ui.theme.TextSecondary
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
-    // Request runtime permission untuk membaca lagu di HP dan menampilkan notifikasi audio
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -63,7 +61,6 @@ class MainActivity : ComponentActivity() {
                     containerColor = DarkBackground,
                     bottomBar = {
                         Column {
-                            // Mini player bar yang selalu muncul jika sedang ada lagu
                             BottomPlayerBar(
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
@@ -75,7 +72,6 @@ class MainActivity : ComponentActivity() {
                                 onSeekTo = { viewModel.musicController.seekTo(it) }
                             )
 
-                            // Navigasi Tab Bawah (Lokal Offline, YouTube Stream, Playlist)
                             NavigationBar(
                                 containerColor = DarkSurface,
                                 tonalElevation = 4.dp
@@ -139,10 +135,12 @@ class MainActivity : ComponentActivity() {
                             }
                             AppTab.STREAM -> {
                                 val searchResults by viewModel.searchResults.collectAsState()
+                                val recommendedSongs by viewModel.recommendedSongs.collectAsState()
                                 val isSearching by viewModel.isSearching.collectAsState()
                                 val downloadStatus by viewModel.downloadStatus.collectAsState()
                                 StreamScreen(
                                     searchResults = searchResults,
+                                    recommendedSongs = recommendedSongs,
                                     isSearching = isSearching,
                                     downloadStatus = downloadStatus,
                                     onSearch = { viewModel.searchYouTube(it) },

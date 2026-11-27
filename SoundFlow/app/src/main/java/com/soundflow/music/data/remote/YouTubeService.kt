@@ -3,76 +3,108 @@ package com.soundflow.music.data.remote
 import com.soundflow.music.data.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 /**
- * Service untuk pencarian lagu di YouTube dan resolusi URL audio streaming
- * menggunakan instance API Piped / Invidious publik yang cepat, stabil & tanpa iklan.
+ * Service pencarian lagu dan resolusi URL audio YouTube
+ * menggunakan YouTube InnerTube API resmi (cepat & stabil)
+ * serta resolver audio stream via Invidious/Cobalt backend.
  */
 class YouTubeService {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    // Daftar instance backend publik dengan fallback otomatis
-    private val pipedInstances = listOf(
-        "https://pipedapi.kavin.rocks",
-        "https://api.piped.privacy.com.de",
-        "https://piped-api.lunar.icu"
+    // Resolver stream audio
+    private val streamResolvers = listOf(
+        "https://yt.chocolatemoo53.com",
+        "https://invidious.nerdvpn.de",
+        "https://inv.nadeko.net",
+        "https://pipedapi.tokhmi.xyz"
     )
 
     /**
-     * Cari lagu di YouTube berdasarkan kata kunci (judul / artis)
+     * Pencarian YouTube resmi via InnerTube API
      */
     suspend fun searchSongs(query: String): List<Song> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<Song>()
-        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        try {
+            val jsonBody = JSONObject().apply {
+                put("context", JSONObject().apply {
+                    put("client", JSONObject().apply {
+                        put("clientName", "WEB")
+                        put("clientVersion", "2.20230526.01.00")
+                        put("hl", "id")
+                        put("gl", "ID")
+                    })
+                })
+                put("query", query)
+            }
 
-        for (baseInstance in pipedInstances) {
-            try {
-                val url = "$baseInstance/search?q=$encodedQuery&filter=music_songs"
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "SoundFlow-Android/1.0")
-                    .build()
+            val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("https://www.youtube.com/youtubei/v1/search")
+                .post(requestBody)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                .build()
 
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@use
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use
 
-                    val responseBody = response.body?.string() ?: return@use
-                    val json = JSONObject(responseBody)
-                    val items = json.optJSONArray("items") ?: JSONArray()
+                val responseStr = response.body?.string() ?: return@use
+                val rootJson = JSONObject(responseStr)
 
-                    for (i in 0 until items.length()) {
-                        val item = items.optJSONObject(i) ?: continue
-                        val itemType = item.optString("type")
-                        if (itemType != "stream") continue
+                val contents = rootJson.optJSONObject("contents")
+                    ?.optJSONObject("twoColumnSearchResultsRenderer")
+                    ?.optJSONObject("primaryContents")
+                    ?.optJSONObject("sectionListRenderer")
+                    ?.optJSONArray("contents") ?: return@use
 
-                        val urlSuffix = item.optString("url") // format: /watch?v=videoId
-                        val videoId = urlSuffix.substringAfter("v=", "")
+                for (i in 0 until contents.length()) {
+                    val section = contents.optJSONObject(i) ?: continue
+                    val itemSection = section.optJSONObject("itemSectionRenderer") ?: continue
+                    val items = itemSection.optJSONArray("contents") ?: continue
+
+                    for (j in 0 until items.length()) {
+                        val item = items.optJSONObject(j) ?: continue
+                        val video = item.optJSONObject("videoRenderer") ?: continue
+
+                        val videoId = video.optString("videoId")
                         if (videoId.isEmpty()) continue
 
-                        val title = item.optString("title")
-                        val uploaderName = item.optString("uploaderName")
-                        val thumbnail = item.optString("thumbnail")
-                        val durationSeconds = item.optLong("duration", 0L)
+                        // Ambil judul
+                        val titleRuns = video.optJSONObject("title")?.optJSONArray("runs")
+                        val title = titleRuns?.optJSONObject(0)?.optString("text") ?: "Unknown Title"
+
+                        // Ambil nama artis / channel
+                        val channelRuns = video.optJSONObject("ownerText")?.optJSONArray("runs")
+                            ?: video.optJSONObject("shortBylineText")?.optJSONArray("runs")
+                        val channel = channelRuns?.optJSONObject(0)?.optString("text") ?: "YouTube Music"
+
+                        // Thumbnail
+                        val thumbs = video.optJSONObject("thumbnail")?.optJSONArray("thumbnails")
+                        val thumbUrl = thumbs?.optJSONObject(thumbs.length() - 1)?.optString("url")
+
+                        // Durasi
+                        val durationText = video.optJSONObject("lengthText")?.optString("simpleText") ?: ""
 
                         songs.add(
                             Song(
                                 id = "yt_$videoId",
                                 title = title,
-                                artist = uploaderName,
+                                artist = channel,
                                 album = "YouTube Music",
-                                durationMs = durationSeconds * 1000L,
-                                mediaUri = "", // Akan di-resolve saat mau diputar / diunduh
-                                artworkUri = thumbnail,
+                                durationMs = parseDuration(durationText),
+                                mediaUri = "",
+                                artworkUri = thumbUrl,
                                 isLocal = false,
                                 isDownloaded = false,
                                 youtubeVideoId = videoId
@@ -80,26 +112,27 @@ class YouTubeService {
                         )
                     }
                 }
-
-                if (songs.isNotEmpty()) {
-                    return@withContext songs
-                }
-            } catch (e: Exception) {
-                // Lanjut coba instance cadangan berikutnya jika terjadi timeout
-                continue
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-
         songs
     }
 
     /**
-     * Dapatkan URL audio stream langsung (M4A / Opus) untuk diputar langsung di ExoPlayer
+     * Dapatkan daftar rekomendasi lagu hits terkini
+     */
+    suspend fun getTrendingMusic(): List<Song> {
+        return searchSongs("Lagu Populer Indonesia Terkini")
+    }
+
+    /**
+     * Dapatkan URL streaming audio langsung (M4A)
      */
     suspend fun resolveAudioStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
-        for (baseInstance in pipedInstances) {
+        for (baseUrl in streamResolvers) {
             try {
-                val url = "$baseInstance/streams/$videoId"
+                val url = "$baseUrl/api/v1/videos/$videoId"
                 val request = Request.Builder()
                     .url(url)
                     .header("User-Agent", "SoundFlow-Android/1.0")
@@ -108,27 +141,29 @@ class YouTubeService {
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@use
 
-                    val responseBody = response.body?.string() ?: return@use
-                    val json = JSONObject(responseBody)
-                    val audioStreams = json.optJSONArray("audioStreams") ?: return@use
+                    val responseStr = response.body?.string() ?: return@use
+                    val json = JSONObject(responseStr)
+                    val formats = json.optJSONArray("adaptiveFormats") ?: return@use
 
-                    // Cari stream audio dengan bitrate optimal (128kbps / 160kbps M4A / WebM)
-                    var bestAudioUrl: String? = null
-                    var maxBitrate = 0
+                    var bestUrl: String? = null
+                    var bestBitrate = 0
 
-                    for (i in 0 until audioStreams.length()) {
-                        val streamObj = audioStreams.optJSONObject(i) ?: continue
-                        val streamUrl = streamObj.optString("url")
-                        val bitrate = streamObj.optInt("bitrate", 0)
+                    for (i in 0 until formats.length()) {
+                        val format = formats.optJSONObject(i) ?: continue
+                        val type = format.optString("type")
+                        val streamUrl = format.optString("url")
+                        val bitrate = format.optInt("bitrate", 0)
 
-                        if (streamUrl.isNotEmpty() && bitrate > maxBitrate) {
-                            maxBitrate = bitrate
-                            bestAudioUrl = streamUrl
+                        if (type.startsWith("audio/") && streamUrl.isNotEmpty()) {
+                            if (bitrate > bestBitrate) {
+                                bestBitrate = bitrate
+                                bestUrl = streamUrl
+                            }
                         }
                     }
 
-                    if (bestAudioUrl != null) {
-                        return@withContext bestAudioUrl
+                    if (bestUrl != null) {
+                        return@withContext bestUrl
                     }
                 }
             } catch (e: Exception) {
@@ -136,5 +171,15 @@ class YouTubeService {
             }
         }
         null
+    }
+
+    private fun parseDuration(text: String): Long {
+        if (text.isBlank()) return 180_000L
+        val parts = text.split(":")
+        var totalSec = 0L
+        for (p in parts) {
+            totalSec = totalSec * 60 + (p.toLongOrNull() ?: 0L)
+        }
+        return totalSec * 1000L
     }
 }

@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+    <!-- Background Bulat Gelap Gradasi -->
+    <path
+        android:fillColor="#1E1E24"
+        android:pathData="M96,0A96,96 0 1,0 96,192A96,96 0 1,0 96,0Z" />
+    
+    <!-- Lingkaran Aksen Ungu Neon -->
+    <path
+        android:fillColor="#6C5CE7"
+        android:pathData="M96,16A80,80 0 1,0 96,176A80,80 0 1,0 96,16Z" />
+
+    <!-- Logo Not Musik & Gelombang Suara Putih Modern -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M80,50 L120,40 L120,95 A18,18 0 1,1 106,85 L106,62 L86,67 L86,110 A18,18 0 1,1 72,100 L72,50 Z" />
+</vector>

@@ -9,7 +9,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,6 +33,7 @@ import com.soundflow.music.ui.theme.TextSecondary
 @Composable
 fun StreamScreen(
     searchResults: List<Song>,
+    recommendedSongs: List<Song>,
     isSearching: Boolean,
     downloadStatus: Map<String, String>,
     onSearch: (String) -> Unit,
@@ -42,6 +42,9 @@ fun StreamScreen(
 ) {
     var query by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    val displayList = if (searchResults.isNotEmpty()) searchResults else recommendedSongs
+    val listTitle = if (searchResults.isNotEmpty()) "Hasil Pencarian" else "🔥 Rekomendasi Lagu Populer"
 
     Column(
         modifier = Modifier
@@ -53,7 +56,12 @@ fun StreamScreen(
         // Search Bar YouTube
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = {
+                query = it
+                if (it.isBlank()) {
+                    onSearch("")
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Cari lagu apa saja di YouTube...", color = TextSecondary) },
             trailingIcon = {
@@ -81,16 +89,23 @@ fun StreamScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        Text(
+            text = listTitle,
+            color = TextPrimary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         if (isSearching) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = PurplePrimary)
             }
-        } else if (searchResults.isEmpty()) {
+        } else if (displayList.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Cari judul lagu atau nama penyanyi", color = TextSecondary, fontSize = 15.sp)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Bisa langsung di-stream atau di-download ke HP!", color = TextSecondary, fontSize = 12.sp)
+                    Text("Belum ada lagu", color = TextSecondary, fontSize = 15.sp)
                 }
             }
         } else {
@@ -99,7 +114,7 @@ fun StreamScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 90.dp)
             ) {
-                items(searchResults) { song ->
+                items(displayList) { song ->
                     val status = downloadStatus[song.id]
 
                     Surface(
@@ -152,7 +167,6 @@ fun StreamScreen(
                                 }
                             }
 
-                            // Tombol Download ke MP3/M4A Offline
                             IconButton(onClick = { onDownload(song) }) {
                                 Icon(
                                     imageVector = Icons.Default.Download,

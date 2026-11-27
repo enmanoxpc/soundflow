@@ -16,14 +16,14 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-      <application
+    <application
         android:name=".SoundFlowApp"
         android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
         android:label="SoundFlow"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="true">
-    
 
         <activity
             android:name=".MainActivity"

@@ -45,6 +45,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _searchResults = MutableStateFlow<List<Song>>(emptyList())
     val searchResults: StateFlow<List<Song>> = _searchResults.asStateFlow()
 
+    private val _recommendedSongs = MutableStateFlow<List<Song>>(emptyList())
+    val recommendedSongs: StateFlow<List<Song>> = _recommendedSongs.asStateFlow()
+
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
@@ -59,8 +62,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         musicController.connect()
         loadLocalSongs()
         loadPlaylists()
+        loadTrendingMusic()
 
-        // Loop untuk update posisi playback pada seekbar
         viewModelScope.launch {
             while (isActive) {
                 musicController.updateProgress()
@@ -82,8 +85,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun loadTrendingMusic() {
+        viewModelScope.launch {
+            _isSearching.value = true
+            val trending = youtubeService.getTrendingMusic()
+            _recommendedSongs.value = trending
+            _isSearching.value = false
+        }
+    }
+
     fun searchYouTube(query: String) {
-        if (query.isBlank()) return
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
         viewModelScope.launch {
             _isSearching.value = true
             val results = youtubeService.searchSongs(query)
@@ -97,7 +112,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (song.isLocal) {
                 musicController.playSong(song)
             } else {
-                // Jika dari YouTube, resolve direct stream url terlebih dahulu
                 val videoId = song.youtubeVideoId ?: return@launch
                 val streamUrl = youtubeService.resolveAudioStreamUrl(videoId)
                 if (streamUrl != null) {
@@ -126,7 +140,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 },
                 onCompleted = {
                     _downloadStatus.value = _downloadStatus.value + (song.id to "Tersimpan!")
-                    // Refresh lagu lokal agar langsung terdeteksi di tab Offline
                     loadLocalSongs()
                 },
                 onError = { err ->
@@ -147,23 +160,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             playlistDao.createPlaylist(PlaylistEntity(name = name))
             loadPlaylists()
-        }
-    }
-
-    fun addSongToPlaylist(playlistId: Long, song: Song) {
-        viewModelScope.launch {
-            playlistDao.addSongToPlaylist(
-                PlaylistSongCrossRef(
-                    playlistId = playlistId,
-                    songId = song.id,
-                    title = song.title,
-                    artist = song.artist,
-                    mediaUri = song.mediaUri,
-                    artworkUri = song.artworkUri,
-                    durationMs = song.durationMs,
-                    isLocal = song.isLocal
-                )
-            )
         }
     }
 
