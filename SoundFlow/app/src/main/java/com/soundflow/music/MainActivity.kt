@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.soundflow.music.ui.AppTab
 import com.soundflow.music.ui.MainViewModel
+import com.soundflow.music.ui.components.AddToPlaylistDialog
 import com.soundflow.music.ui.components.BottomPlayerBar
 import com.soundflow.music.ui.screens.LocalSongsScreen
 import com.soundflow.music.ui.screens.PlaylistScreen
@@ -56,6 +57,8 @@ class MainActivity : ComponentActivity() {
                 val isPlaying by viewModel.musicController.isPlaying.collectAsState()
                 val currentPosition by viewModel.musicController.currentPosition.collectAsState()
                 val duration by viewModel.musicController.duration.collectAsState()
+                val songForPlaylist by viewModel.songForPlaylistDialog.collectAsState()
+                val playlists by viewModel.playlists.collectAsState()
 
                 Scaffold(
                     containerColor = DarkBackground,
@@ -130,7 +133,8 @@ class MainActivity : ComponentActivity() {
                                     songs = localSongs,
                                     isScanning = isScanning,
                                     onRefreshScan = { viewModel.loadLocalSongs() },
-                                    onSongClick = { viewModel.playSong(it) }
+                                    onSongClick = { viewModel.playSong(it) },
+                                    onAddToPlaylistClick = { viewModel.openAddToPlaylistDialog(it) }
                                 )
                             }
                             AppTab.STREAM -> {
@@ -145,17 +149,37 @@ class MainActivity : ComponentActivity() {
                                     downloadStatus = downloadStatus,
                                     onSearch = { viewModel.searchYouTube(it) },
                                     onPlayStream = { viewModel.playSong(it) },
-                                    onDownload = { viewModel.downloadSong(it) }
+                                    onDownload = { viewModel.downloadSong(it) },
+                                    onAddToPlaylistClick = { viewModel.openAddToPlaylistDialog(it) }
                                 )
                             }
                             AppTab.PLAYLIST -> {
-                                val playlists by viewModel.playlists.collectAsState()
                                 PlaylistScreen(
                                     playlists = playlists,
-                                    onCreatePlaylist = { viewModel.createPlaylist(it) }
+                                    onCreatePlaylist = { viewModel.createPlaylist(it) },
+                                    onDeletePlaylist = { viewModel.deletePlaylist(it) },
+                                    onGetPlaylistSongs = { viewModel.getSongsForPlaylist(it) },
+                                    onRemoveSongFromPlaylist = { pId, sId -> viewModel.removeSongFromPlaylist(pId, sId) },
+                                    onPlaySong = { viewModel.playSong(it) },
+                                    onPlayPlaylist = { viewModel.playPlaylist(it) }
                                 )
                             }
                         }
+                    }
+
+                    // Dialog Tambah ke Playlist
+                    songForPlaylist?.let { song ->
+                        AddToPlaylistDialog(
+                            song = song,
+                            playlists = playlists,
+                            onDismiss = { viewModel.closeAddToPlaylistDialog() },
+                            onAddToPlaylist = { playlistId, targetSong ->
+                                viewModel.addSongToPlaylist(playlistId, targetSong)
+                            },
+                            onCreatePlaylist = { name ->
+                                viewModel.createPlaylist(name)
+                            }
+                        )
                     }
                 }
             }

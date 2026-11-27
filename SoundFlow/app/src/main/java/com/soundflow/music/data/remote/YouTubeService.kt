@@ -93,8 +93,22 @@ class YouTubeService {
                         val thumbs = video.optJSONObject("thumbnail")?.optJSONArray("thumbnails")
                         val thumbUrl = thumbs?.optJSONObject(thumbs.length() - 1)?.optString("url")
 
-                        // Durasi
-                        val durationText = video.optJSONObject("lengthText")?.optString("simpleText") ?: ""
+                        // Durasi (Cek lengthText, jika kosong cek thumbnailOverlays)
+                        var durationText = video.optJSONObject("lengthText")?.optString("simpleText") ?: ""
+                        if (durationText.isBlank()) {
+                            val overlays = video.optJSONArray("thumbnailOverlays")
+                            if (overlays != null) {
+                                for (k in 0 until overlays.length()) {
+                                    val overlayObj = overlays.optJSONObject(k)?.optJSONObject("thumbnailOverlayTimeStatusRenderer")
+                                    val textObj = overlayObj?.optJSONObject("text")
+                                    val overlayText = textObj?.optString("simpleText") ?: ""
+                                    if (overlayText.isNotEmpty()) {
+                                        durationText = overlayText
+                                        break
+                                    }
+                                }
+                            }
+                        }
 
                         songs.add(
                             Song(
